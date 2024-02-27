@@ -17,4 +17,8 @@ impl Color {
 
         Color { r, g, b, a }
     }
+
+    pub fn from_gl(r: f32, g: f32, b: f32, a: f32) -> Self {
+        Color { r, g, b, a }
+    }
 }

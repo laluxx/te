@@ -4,13 +4,11 @@ extern crate glfw;
 mod color;
 use crate::color::Color;
 mod renderer;
-use crate::renderer::Renderer;
+use crate::renderer::{Renderer, compile_shader, link_program};
 mod font;
 use crate::font::FontAtlas;
 
 use glfw::{Action, Context, Key};
-use std::fs::read_to_string;
-use std::ffi::CString;
 
 fn main() {
     let mut glfw = glfw::init_no_callbacks().unwrap();
@@ -34,12 +32,8 @@ fn main() {
         }
     });
 
-    // Shader compilation and program linking
-    let simple_vert = compile_shader("./src/shaders/simple.vert", gl::VERTEX_SHADER);
-    let simple_frag = compile_shader("./src/shaders/simple.frag", gl::FRAGMENT_SHADER);
-    let simple_shader = link_program(simple_vert, simple_frag);
-
-    let mut renderer = Renderer::new(simple_shader, 800.0, 600.0);
+    let mut renderer = Renderer::new(800.0, 600.0);
+    renderer.init_shaders();
     
     let background_color = Color::from_hex("#090909");
     let quad_color = Color::from_hex("#514B8E");
@@ -61,13 +55,16 @@ fn main() {
         
         renderer.draw_quad(quad_position, (width, 21.0), &quad_color);
 
+        renderer.use_shader("simple");
+
         renderer.draw_triangle_colors(
             [(100.0, 100.0), (400.0, 100.0), (250.0, 300.0)],
             [&Color::from_hex("#A3212C"), &Color::from_hex("#933484"), &Color::from_hex("#00A67D")]
         );
 
         renderer.flush();
-        
+
+        renderer.use_shader("gray");
         renderer.draw_quad_colors(
             ((width - 100.0) / 2.0, (height - 100.0) / 2.0),
             (100.0, 100.0),
@@ -93,53 +90,6 @@ fn main() {
 }
 
 
-fn compile_shader(path: &str, shader_type: gl::types::GLenum) -> gl::types::GLuint {
-    let shader_src = read_to_string(path).expect("Failed to read shader file");
-    let shader_c_str = CString::new(shader_src.as_bytes()).unwrap();
-    let shader = unsafe {
-        let shader = gl::CreateShader(shader_type);
-        gl::ShaderSource(shader, 1, &shader_c_str.as_ptr(), std::ptr::null());
-        gl::CompileShader(shader);
-
-        let mut success: gl::types::GLint = 1;
-        gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut success);
-        if success == 0 {
-            let mut len: gl::types::GLint = 0;
-            gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-            let error = CString::new(vec![b' '; len as usize]).unwrap();
-            gl::GetShaderInfoLog(shader, len, std::ptr::null_mut(), error.as_ptr() as *mut gl::types::GLchar);
-            panic!("Failed to compile shader: {}", error.to_string_lossy());
-        }
-
-        shader
-    };
-
-    shader
-}
-
-fn link_program(vert_shader: gl::types::GLuint, frag_shader: gl::types::GLuint) -> gl::types::GLuint {
-    unsafe {
-        let program = gl::CreateProgram();
-        gl::AttachShader(program, vert_shader);
-        gl::AttachShader(program, frag_shader);
-        gl::LinkProgram(program);
-
-        let mut success: gl::types::GLint = 1;
-        gl::GetProgramiv(program, gl::LINK_STATUS, &mut success);
-        if success == 0 {
-            let mut len: gl::types::GLint = 0;
-            gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-            let error = CString::new(vec![b' '; len as usize]).unwrap();
-            gl::GetProgramInfoLog(program, len, std::ptr::null_mut(), error.as_ptr() as *mut gl::types::GLchar);
-            panic!("Failed to link program: {}", error.to_string_lossy());
-        }
-
-        gl::DeleteShader(vert_shader);
-        gl::DeleteShader(frag_shader);
-
-        program
-    }
-}
 
 
 
