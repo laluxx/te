@@ -24,11 +24,15 @@ impl Renderer {
             gl::BufferData(gl::ARRAY_BUFFER, 0, std::ptr::null(), gl::DYNAMIC_DRAW); // Allocate buffer, but don't fill it yet
             
             // Position attribute
-            gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 7 * std::mem::size_of::<f32>() as gl::types::GLsizei, 0 as *const c_void);
+            gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 9 * std::mem::size_of::<f32>() as gl::types::GLsizei, 0 as *const c_void);
             gl::EnableVertexAttribArray(0);
             // Color attribute
-            gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, 7 * std::mem::size_of::<f32>() as gl::types::GLsizei, (3 * std::mem::size_of::<f32>()) as *const c_void);
+            gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, 9 * std::mem::size_of::<f32>() as gl::types::GLsizei, (3 * std::mem::size_of::<f32>()) as *const c_void);
             gl::EnableVertexAttribArray(1);
+            // UV attribute
+            gl::VertexAttribPointer(2, 2, gl::FLOAT, gl::FALSE, 9 * std::mem::size_of::<f32>() as gl::types::GLsizei, (7 * std::mem::size_of::<f32>()) as *const c_void);
+            gl::EnableVertexAttribArray(2);
+
         }
 
         let projection_matrix = Matrix4::orthographic(0.0, window_width, window_height, 0.0, -1.0, 1.0);
@@ -43,24 +47,23 @@ impl Renderer {
         }
     }
 
-    pub fn draw_vertex(&mut self, position: (f32, f32), color: &Color) {
+    pub fn draw_vertex(&mut self, position: (f32, f32), color: &Color, uv: (f32, f32)) {
         self.vertices.extend_from_slice(&[
             position.0, position.1, 0.0, // X, Y, Z
             color.r, color.g, color.b, color.a, // R, G, B, A
+            uv.0, uv.1, // U, V
         ]);
     }
 
-    pub fn draw_triangle(&mut self, vertices: [(f32, f32); 3], color: &Color) {
-        for &vertex in &vertices {
-            self.draw_vertex(vertex, color);
+    pub fn draw_triangle(&mut self, vertices: [(f32, f32); 3], color: &Color, uvs: [(f32, f32); 3]) {
+        for (&vertex, &uv) in vertices.iter().zip(uvs.iter()) {
+            self.draw_vertex(vertex, color, uv);
         }
     }
 
-    pub fn draw_triangle_colors(&mut self, vertices: [(f32, f32); 3], colors: [&Color; 3]) {
-        let vertices_and_colors = vertices.iter().zip(colors.iter());
-
-        for (&vertex, &color) in vertices_and_colors {
-            self.draw_vertex(vertex, color);
+    pub fn draw_triangle_colors(&mut self, vertices: [(f32, f32); 3], colors: [&Color; 3], uvs: [(f32, f32); 3]) {
+        for ((&vertex, &color), &uv) in vertices.iter().zip(colors.iter()).zip(uvs.iter()) {
+            self.draw_vertex(vertex, color, uv);
         }
     }
 
@@ -68,30 +71,56 @@ impl Renderer {
         let (x, y) = position;
         let (width, height) = size;
 
-        let top_left = (x, y);
-        let top_right = (x + width, y);
-        let bottom_left = (x, y + height);
-        let bottom_right = (x + width, y + height);
+        let vertices = [
+            (x, y), // Top Left
+            (x + width, y), // Top Right
+            (x, y + height), // Bottom Left
+            (x + width, y + height), // Bottom Right
+        ];
 
-        self.draw_triangle([top_left, bottom_left, top_right], color);
-        self.draw_triangle([top_right, bottom_left, bottom_right], color);
+        // TODO Maybe it should take the UVs as argument
+        let uvs = [
+            (0.0, 0.0), // Top Left
+            (1.0, 0.0), // Top Right
+            (0.0, 1.0), // Bottom Left
+            (1.0, 1.0), // Bottom Right
+        ];
+
+        self.draw_triangle([vertices[0], vertices[2], vertices[1]], color, [uvs[0], uvs[2], uvs[1]]);
+        self.draw_triangle([vertices[1], vertices[2], vertices[3]], color, [uvs[1], uvs[2], uvs[3]]);
     }
 
+    
     pub fn draw_quad_colors(&mut self, position: (f32, f32), size: (f32, f32), colors: [&Color; 4]) {
         let (x, y) = position;
         let (width, height) = size;
 
-        let top_left = (x, y);
-        let top_right = (x + width, y);
-        let bottom_left = (x, y + height);
-        let bottom_right = (x + width, y + height);
+        let vertices = [
+            (x, y),                  // Top Left
+            (x + width, y),          // Top Right
+            (x, y + height),         // Bottom Left
+            (x + width, y + height), // Bottom Right
+        ];
 
-        // First triangle (top left, bottom left, top right)
-        self.draw_triangle_colors([top_left, bottom_left, top_right], [&colors[0], &colors[1], &colors[2]]);
+        let uvs = [
+            (0.0, 0.0), // Top Left
+            (1.0, 0.0), // Top Right
+            (0.0, 1.0), // Bottom Left
+            (1.0, 1.0), // Bottom Right
+        ];
 
-        // Second triangle (top right, bottom left, bottom right)
-        self.draw_triangle_colors([top_right, bottom_left, bottom_right], [&colors[2], &colors[1], &colors[3]]);
+        // First Triangle
+        self.draw_triangle_colors([vertices[0], vertices[2], vertices[1]], 
+                                  [&colors[0], &colors[2], &colors[1]], 
+                                  [uvs[0], uvs[2], uvs[1]]);
+
+        // Second Triangle
+        self.draw_triangle_colors([vertices[1], vertices[2], vertices[3]], 
+                                  [&colors[1], &colors[2], &colors[3]], 
+                                  [uvs[1], uvs[2], uvs[3]]);
     }
+
+    
 
 
     // SHADERS 
@@ -102,9 +131,14 @@ impl Renderer {
 
         let gray_frag = compile_shader("./src/shaders/gray.frag", gl::FRAGMENT_SHADER);
         let gray_shader = link_program(simple_vert, gray_frag);
+
+        let texture_frag = compile_shader("./src/shaders/texture.frag", gl::FRAGMENT_SHADER);
+        let texture_shader = link_program(simple_vert, texture_frag);
+
         
         self.shaders.insert("simple".to_string(), simple_shader);
         self.shaders.insert("gray".to_string(), gray_shader);
+        self.shaders.insert("texture".to_string(), texture_shader);
     }
 
     pub fn use_shader(&mut self, name: &str) {
@@ -189,7 +223,7 @@ pub fn link_program(vert_shader: gl::types::GLuint, frag_shader: gl::types::GLui
 }
 
 
-// LINEAR ALGEBRA
+
 pub struct Matrix4 {
     elements: [f32; 16], // Column-major order to match OpenGL's expectation
 }

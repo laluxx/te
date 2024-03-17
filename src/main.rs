@@ -4,7 +4,7 @@ extern crate glfw;
 mod color;
 use crate::color::Color;
 mod renderer;
-use crate::renderer::{Renderer, compile_shader, link_program};
+use crate::renderer::Renderer;
 mod font;
 use crate::font::FontAtlas;
 
@@ -59,12 +59,14 @@ fn main() {
 
         renderer.draw_triangle_colors(
             [(100.0, 100.0), (400.0, 100.0), (250.0, 300.0)],
-            [&Color::from_hex("#A3212C"), &Color::from_hex("#933484"), &Color::from_hex("#00A67D")]
+            [&Color::from_hex("#A3212C"), &Color::from_hex("#933484"), &Color::from_hex("#00A67D")],
+            [(100.0, 100.0), (400.0, 100.0), (250.0, 300.0)],
         );
 
-        renderer.flush();
+        // renderer.flush();
 
-        renderer.use_shader("gray");
+        // renderer.use_shader("gray");
+
         renderer.draw_quad_colors(
             ((width - 100.0) / 2.0, (height - 100.0) / 2.0),
             (100.0, 100.0),
